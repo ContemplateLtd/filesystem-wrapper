@@ -1,0 +1,75 @@
+ifndef OCAMLOUTDIR
+  OCAMLOUTDIR=./
+endif
+
+OCAMLFLAGS=-g -annot -dtypes -I $(OCAMLOUTDIR)
+OCAMLOPTFLAGS=$(OCAMLFLAGS)
+
+findprog=$(firstword $(wildcard $(addsuffix /$(1),$(subst :, ,$(PATH)))))
+ifndef target
+  OCAMLC := $(call findprog,ocamlc.opt)
+  OCAMLOPT := $(subst ocamlc,ocamlopt,$(OCAMLC))
+  PREFIX := $(dir $(OCAMLC))
+  EXEEXT=
+else ifeq ($(target),win32)
+  OCAMLC := $(call findprog,i*86-w64-mingw32-ocamlc)
+  OCAMLOPT := $(subst ocamlc,ocamlopt,$(OCAMLC))
+  PREFIX := $(patsubst %ocamlc,%,$(OCAMLC))
+  EXEEXT=.exe
+else
+  OCAMLC := $(call findprog,x86_64-w64-mingw32-ocamlc)
+  OCAMLOPT := $(subst ocamlc,ocamlopt,$(OCAMLC))
+  PREFIX := $(patsubst %ocamlc,%,$(OCAMLC))
+  EXEEXT=.exe
+endif
+
+# Use typerex unless cross-compiling, or typerex is set to 'no'.
+ifndef target
+ifneq ($(typerex),no)
+  WRAPPER := $(call findprog,ocp-wrapper)
+  OCAMLC := $(if $(WRAPPER),$(WRAPPER) -save-types ocamlc.opt,$(OCAMLC))
+  OCAMLOPT := $(if $(WRAPPER),$(WRAPPER) -save-types ocamlopt.opt,$(OCAMLOPT))
+endif
+endif
+
+OCAMLCP  := $(PREFIX)ocamlcp -p a
+OCAMLDEP := $(PREFIX)ocamldep
+OCAMLMKLIB = $(PREFIX)ocamlmklib
+OCAMLYACC = ocamlyacc
+OCAMLLEX = ocamllex
+OCAMLFIND = ocamlfind
+
+cmo-files = $(patsubst %.ml,$(OCAMLOUTDIR)/%.cmo,$(filter-out %.mli,$(1)))
+cmx-files = $(patsubst %.ml,$(OCAMLOUTDIR)/%.cmx,$(filter-out %.mli,$(1)))
+cmi-files = $(patsubst %.mli,$(OCAMLOUTDIR)/%.cmi,$(filter %.mli,$(1)))
+
+.DEFAULT_GOAL_TMP:=$(.DEFAULT_GOAL)
+$(OCAMLOUTDIR):
+	mkdir -p $@
+.DEFAULT_GOAL:=$(.DEFAULT_GOAL_TMP)
+
+OCAMLOUTPUTS=.ocamldeps *.annot *.cm[aiotx]* *.a *.o *.exe
+CLEAN=.ocamldeps *.output *.exe
+
+COMPILE = @echo "  $(1) $(2)" && $(3) || \
+  (! echo "===\nCompiling $2 failed with command line: \n$(3)\n===")
+
+$(OCAMLOUTDIR)/%.cmx: CMD=$(OCAMLOPT) $(OCAMLOPTFLAGS) -o $@ $(LIBDIRS) -c $<
+$(OCAMLOUTDIR)/%.cmx: %.ml | $(OCAMLOUTDIR)
+	$(call COMPILE,OCAMLOPT,$<,$(CMD))
+
+$(OCAMLOUTDIR)/%.cmo:
+  CMD = $(if $(OCAMLPROF),$(OCAMLCP),$(OCAMLC))
+  CMDNAME = $(if $(OCAMLPROF),OCAMLCP,OCAMLC)
+  ARGS = $(OCAMLFLAGS) $(LIBDIRS) -o $@ -c $<
+$(OCAMLOUTDIR)/%.cmo: %.ml | $(OCAMLOUTDIR)
+	$(call COMPILE,$(CMDNAME),$<,$(CMD) $(ARGS))
+
+$(OCAMLOUTDIR)/%.cmi: CMD=$(OCAMLC) $(OCAMLFLAGS) $(LIBDIRS) -o $@ -c $<
+$(OCAMLOUTDIR)/%.cmi: %.mli | $(OCAMLOUTDIR)
+	$(call COMPILE,OCAMLC,$<,$(CMD))
+
+%.ml: %.mll
+	$(OCAMLLEX) -o $@ $<
+%.ml: %.mly
+	$(OCAMLYACC) -v $<
