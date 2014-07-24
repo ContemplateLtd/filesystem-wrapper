@@ -1,0 +1,13 @@
+# Filesystem
+
+This is a small OCaml module that provides a common interface to a
+small set of filesystem operations on Unix (tested on Linux and Mac OS
+X) and Windows platforms.
+
+The main improvement in this module over the OCaml standard library is
+the use of the unicode Win32 API functions, allowing for "very long
+filename" support on Windows, i.e., paths over 250 characters.
+
+Type `make` to build Unix version natively, and `make target=win32` to
+build using a cross-compiler on linux for windows. Assumes the Debian
+ocaml cross-compiler packages have been installed.
